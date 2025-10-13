@@ -1,0 +1,75 @@
+---
+title: "p8105_hw3_YZ5290"
+output: github_document
+date: "2025-10-13"
+---
+
+Problem 1
+```{r}
+library(tidyverse)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+```
+
+```{r}
+library(p8105.datasets)
+data("instacart")
+```
+```{r}
+instacart
+```
+The dataset contains 138461 observations and 15 variables. Each observation is a single product from an Instacart order. Key variables include order_id: a different ID for each order; product_id: a different ID for each product and product_name which is the name of the product. The example product 	
+Bulgarian Yogurt has unique product id 49302 belong to yogurt aisel is in order id 1 and has reordered once. 
+
+```{r}
+instacart|>
+  count(aisle, sort = TRUE)
+```
+There are 134 aisle in total and the most items ordered from fresh vergetables. 
+```{r}
+instacart |>
+  count(aisle, sort = TRUE) |>
+  filter(n > 10000) |>
+  mutate(aisle = fct_reorder(aisle, n)) |>
+  ggplot(aes(x = n, y = aisle)) +
+  geom_col(fill = "skyblue") +
+  labs(
+    title = "Number of Items Ordered by Aisle (>10,000 orders)",
+    x = "Number of Items Ordered",
+    y = "Aisle"
+  )
+```
+
+```{r}
+top3tble=
+  instacart |>
+  filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) |>
+  count(aisle, product_name, name = "num_orders") |>
+  group_by(aisle) |>
+  slice_max(order_by = num_orders, n = 3) |>
+  ungroup()
+top3tble
+
+```
+
+
+
+
+
+
+
+
