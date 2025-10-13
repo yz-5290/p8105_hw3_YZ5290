@@ -7,6 +7,7 @@ date: "2025-10-13"
 Problem 1
 ```{r}
 library(tidyverse)
+library(patchwork)
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.asp = .6,
@@ -65,6 +66,200 @@ top3tble=
 top3tble
 
 ```
+```{r}
+mean_hour_table=
+  instacart |>
+  filter(product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) |>
+  group_by(product_name, order_dow) |>
+  summarize(mean_hour = mean(order_hour_of_day), .groups = "drop") |>
+  pivot_wider(
+    names_from = order_dow,
+    values_from = mean_hour,
+    names_prefix = "Day"
+  )
+mean_hour_table
+
+mean_hour_table |>
+  rename(
+    Sunday=Day0,
+    Monday=Day1,
+    Tuesday=Day2,
+    Wednesday=Day3,
+    Thursday=Day4,
+    Friday=Day5,
+    Saturday=Day6
+  )
+```
+
+problem2
+
+```{r}
+zipcode=read_csv("data/zipcode.csv")|>
+  janitor::clean_names()
+zori=read_csv("data/zori.csv")|>
+  janitor::clean_names()
+```
+```{r}
+#clean data
+zipcode_new=
+  zipcode|>
+  select(zip_code, county, neighborhood) |>
+  distinct(zip_code, .keep_all = TRUE) |>
+  mutate(zip_code = as.character(zip_code))
+
+zori_new = 
+  zori |>
+  select(region_id, size_rank, region_name, region_type, 
+         state_name, state, city, metro, county_name,
+         x2015_01_31:x2024_08_31) |>
+  pivot_longer(
+    cols = x2015_01_31:x2024_08_31,
+    names_to = "date_str",
+    values_to = "rent_price"
+  ) |>
+  mutate(
+    date_str_clean = str_remove(date_str, "^x") |> str_replace_all("_", "-"),
+    date = as.Date(date_str_clean, format = "%Y-%m-%d"),
+    zip_code = as.character(region_name)
+  ) |>
+  select(-date_str, -date_str_clean, -region_name)
+
+```
+
+```{r}
+final_data <- zori_new |>
+  left_join(zipcode_new, by = "zip_code") |>
+  select(zip_code, county, neighborhood, date, rent_price, everything()) |>
+  arrange(zip_code, date)
+```
+
+##count month
+```{r}
+zip_obs_count=
+  final_data |>
+  group_by(zip_code) |>
+  summarise(
+    n_146 = n(),
+    n_0 = sum(!is.na(rent_price))
+  )
+
+n_146_obs <- sum(zip_obs_count$n_146 == 116)
+n_0_obs <- sum(zip_obs_count$n_0 < 10)
+```
+
+There are 149 zipcodes are observed 116 month and there are 26 zip code observed fewer than 10 months. 
+Some zipcodes reported monthly can have data for 116 months. Some zipcode do not contain residential house like unique university zipcode might not have rent price to report. 
+
+##make a table (average rental price in each borough and year)
+```{r}
+borough_t=
+  final_data |>
+  mutate(year = year(date)) |>
+  filter(!is.na(county), !is.na(rent_price)) |>
+  group_by(county, year) |>
+  summarise(
+    avg_rent = mean(rent_price, na.rm = TRUE),
+    n_zips = n_distinct(zip_code),
+    .groups = "drop"
+  ) |>
+  arrange(county, year)
+reader_table=
+  borough_t|>
+  select(county, year, avg_rent) |>
+  pivot_wider(
+    names_from = year,
+    values_from = avg_rent
+  ) |>
+  mutate(across(where(is.numeric), ~round(., 2)))
+reader_table
+```
+##comments on the trend:
+the rental price for each country increase over year. New York has the highest rental price every year and bronx has the lowest every year. 
+
+#plot showing NYC Rental Prices within ZIP codes for all available years. Your plot should facilitate comparisons across boroughs
+
+```{r}
+plot1=
+  final_data |>
+  filter(!is.na(county), !is.na(rent_price)) |>
+  mutate(year_month = floor_date(date, "month")) |>
+  group_by(county, year_month) |>
+  summarise(
+    median_rent = median(rent_price, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(x = year_month, y = median_rent, color = county)) +
+  geom_point(size=0.8) +
+  labs(
+    title = "NYC Rental Prices by Borough (2015-2024)",
+    x = "Date", 
+    y = "Median Rent",
+    color = "Borough"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+plot1
+```
+
+##comment: 
+Overall, the rent price increased from 2015 to 2024. But in New York contry, rent pricedecerase from 2020 fall to 2021, which appear to be a huge drop. This is not seen in the previous table. Bronx and Queens also has a little drop in the same timee period. 
+
+
+#Compute the average rental price within each ZIP code over each month in 2023
+```{r}
+zip_2023_avg=
+  final_data|>
+  mutate(year = year(date))|>
+  filter(year == 2023, !is.na(rent_price), !is.na(county)) |>
+  group_by(zip_code, county)|>
+  summarise(
+    avg_rent = mean(rent_price, na.rm = TRUE),
+    .groups="drop"
+  )
+
+plot2=
+  ggplot(zip_2023_avg, aes(x = avg_rent, y = county, fill = county))+
+  geom_boxplot(alpha = 0.6) +
+  labs(
+    title = "Distribution of ZIP-code-level Rental Prices by Borough (2023)",
+    x="Average Rent",
+    y="Borough"
+  )+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+plot2
+```
+#comment:
+New York county has the highest average rental price with the largest range. Kings the the second highest average rental price. Richmond has lowest range. THe bronx has lowest average rental pricebut richmond's average rntal price is slight more than Bronx's.
+
+#combine two graph and export. 
+```{r}
+combined_plot=
+  plot1 /plot2
+
+
+
+ggsave("result/nyc.png", combined_plot, 
+       width = 12, height = 10)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
