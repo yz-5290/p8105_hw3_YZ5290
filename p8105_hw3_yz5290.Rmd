@@ -56,14 +56,14 @@ instacart |>
 ```
 
 ```{r}
-top3tble=
-  instacart |>
+instacart |>
   filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) |>
   count(aisle, product_name, name = "num_orders") |>
   group_by(aisle) |>
   slice_max(order_by = num_orders, n = 3) |>
-  ungroup()
-top3tble
+  ungroup() |>
+  knitr::kable()
+
 
 ```
 ```{r}
@@ -88,7 +88,9 @@ mean_hour_table |>
     Thursday=Day4,
     Friday=Day5,
     Saturday=Day6
-  )
+  )|>
+  knitr::kable()
+
 ```
 
 problem2
@@ -127,7 +129,7 @@ zori_new =
 ```
 
 ```{r}
-final_data <- zori_new |>
+final_data = zori_new |>
   left_join(zipcode_new, by = "zip_code") |>
   select(zip_code, county, neighborhood, date, rent_price, everything()) |>
   arrange(zip_code, date)
@@ -143,8 +145,8 @@ zip_obs_count=
     n_0 = sum(!is.na(rent_price))
   )
 
-n_146_obs <- sum(zip_obs_count$n_146 == 116)
-n_0_obs <- sum(zip_obs_count$n_0 < 10)
+n_146_obs = sum(zip_obs_count$n_146 == 116)
+n_0_obs = sum(zip_obs_count$n_0 < 10)
 ```
 
 There are 149 zipcodes are observed 116 month and there are 26 zip code observed fewer than 10 months. 
@@ -163,15 +165,18 @@ borough_t=
     .groups = "drop"
   ) |>
   arrange(county, year)
-reader_table=
-  borough_t|>
+borough_t |>
   select(county, year, avg_rent) |>
   pivot_wider(
     names_from = year,
     values_from = avg_rent
   ) |>
-  mutate(across(where(is.numeric), ~round(., 2)))
-reader_table
+  mutate(across(where(is.numeric), ~round(., 2))) |>
+  knitr::kable(
+    caption = "Average Rent for each County and Year"
+  )
+  
+
 ```
 ##comments on the trend:
 the rental price for each country increase over year. New York has the highest rental price every year and bronx has the lowest every year. 
@@ -273,7 +278,8 @@ demo_clean=
                                 "High school equivalent", 
                                 "More than high school"))
   )
-demo_clean
+demo_clean |>
+  knitr::kable()
 
 acc_long=
   acc |>
@@ -287,7 +293,8 @@ acc_long=
     hour = floor((minute - 1) / 60)
   ) |>
   select(seqn, minute, hour, mims_value) 
-acc_long
+acc_long |>
+  knitr::kable()
 
 ```
 
