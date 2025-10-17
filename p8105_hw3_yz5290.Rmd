@@ -96,67 +96,50 @@ mean_hour_table |>
 problem2
 
 ```{r}
-zipcode=read_csv("data/zipcode.csv")|>
-  janitor::clean_names()
-zori=read_csv("data/zori.csv")|>
-  janitor::clean_names()
+zipcode=read_csv("data/zipcode.csv",na=c("NA",".",""))|> 
+  janitor::clean_names()|> 
+  select(-file_date,-state_fips) 
+zori=read_csv("data/zori.csv",na=c("NA",".",""))|> 
+  janitor::clean_names()|> 
+  rename(zip_code=region_name)|> 
+  mutate(county_name = str_remove(county_name, " County$"))|> 
+  select(-region_type,-state_name,-state,-city,-metro,-county_name)
 ```
 ```{r}
-#clean data
-zipcode_new=
-  zipcode|>
-  select(zip_code, county, neighborhood) |>
-  distinct(zip_code, .keep_all = TRUE) |>
-  mutate(zip_code = as.character(zip_code))
+zip_df=
+  left_join(zipcode,zori,by=c("zip_code"))|>
+  relocate(zip_code)
+##zip codes>116 times
+zip_df|>
+  drop_na(x2015_01_31:x2024_08_31)|>
+  distinct(zip_code)|>
+  nrow()
+## zip codes < 10 times
+new_zip=select(zori,zip_code,x2015_01_31:x2024_08_31)
 
-zori_new = 
-  zori |>
-  select(region_id, size_rank, region_name, region_type, 
-         state_name, state, city, metro, county_name,
-         x2015_01_31:x2024_08_31) |>
-  pivot_longer(
-    cols = x2015_01_31:x2024_08_31,
-    names_to = "date_str",
-    values_to = "rent_price"
-  ) |>
-  mutate(
-    date_str_clean = str_remove(date_str, "^x") |> str_replace_all("_", "-"),
-    date = as.Date(date_str_clean, format = "%Y-%m-%d"),
-    zip_code = as.character(region_name)
-  ) |>
-  select(-date_str, -date_str_clean, -region_name)
+filter(new_zip, rowSums(is.na(across(x2015_01_31:x2024_08_31)))>106)|>
+  distinct(zip_code)|>
+  nrow()
 
 ```
 
-```{r}
-final_data = zori_new |>
-  left_join(zipcode_new, by = "zip_code") |>
-  select(zip_code, county, neighborhood, date, rent_price, everything()) |>
-  arrange(zip_code, date)
-```
 
-##count month
-```{r}
-zip_obs_count=
-  final_data |>
-  group_by(zip_code) |>
-  summarise(
-    n_146 = n(),
-    n_0 = sum(!is.na(rent_price))
-  )
-
-n_146_obs = sum(zip_obs_count$n_146 == 116)
-n_0_obs = sum(zip_obs_count$n_0 < 10)
-```
-
-There are 149 zipcodes are observed 116 month and there are 26 zip code observed fewer than 10 months. 
+There are 48 zipcodes are observed 116 month and there are 26 zip code observed fewer than 10 months. 
 Some zipcodes reported monthly can have data for 116 months. Some zipcode do not contain residential house like unique university zipcode might not have rent price to report. 
 
 ##make a table (average rental price in each borough and year)
 ```{r}
-borough_t=
-  final_data |>
-  mutate(year = year(date)) |>
+zip_long = zip_df |>
+  pivot_longer(
+    cols = starts_with("x"),
+    names_to = "date",
+    values_to = "rent_price"
+  ) |>
+  mutate(
+    date = ymd(str_remove(date, "^x")),
+    year = year(date)
+  )
+borough_t = zip_long |>
   filter(!is.na(county), !is.na(rent_price)) |>
   group_by(county, year) |>
   summarise(
@@ -165,6 +148,7 @@ borough_t=
     .groups = "drop"
   ) |>
   arrange(county, year)
+
 borough_t |>
   select(county, year, avg_rent) |>
   pivot_wider(
@@ -173,7 +157,7 @@ borough_t |>
   ) |>
   mutate(across(where(is.numeric), ~round(., 2))) |>
   knitr::kable(
-    caption = "Average Rent for each County and Year"
+    caption = "Average Rent for Each County and Year"
   )
   
 
@@ -185,7 +169,7 @@ the rental price for each country increase over year. New York has the highest r
 
 ```{r}
 plot1=
-  final_data |>
+  zip_long |>
   filter(!is.na(county), !is.na(rent_price)) |>
   mutate(year_month = floor_date(date, "month")) |>
   group_by(county, year_month) |>
@@ -213,7 +197,7 @@ Overall, the rent price increased from 2015 to 2024. But in New York contry, ren
 #Compute the average rental price within each ZIP code over each month in 2023
 ```{r}
 zip_2023_avg=
-  final_data|>
+  zip_long|>
   mutate(year = year(date))|>
   filter(year == 2023, !is.na(rent_price), !is.na(county)) |>
   group_by(zip_code, county)|>
@@ -278,8 +262,6 @@ demo_clean=
                                 "High school equivalent", 
                                 "More than high school"))
   )
-demo_clean |>
-  knitr::kable()
 
 acc_long=
   acc |>
@@ -293,9 +275,6 @@ acc_long=
     hour = floor((minute - 1) / 60)
   ) |>
   select(seqn, minute, hour, mims_value) 
-acc_long |>
-  knitr::kable()
-
 ```
 
 ```{r}
@@ -334,7 +313,8 @@ age_plot
 ```
 
 #comment:
-for education level that less than high school and high school equivalent, average age of female is more than average age of male. For more than high school education level, the average age of female is slightly lower than average age of male. 
+The table shows that  for more than high school, male and female are about equivalent and they are the largest group. Moreover, less than high school is the smallest group. 
+The boxplot shows that for less than high school level people, they are generally younger. For more than high school people, they are generally younger. Female are generagarlly older in less than high school and high school equivalent group. 
 
 
 #create a total activity variable for each participant and plot
@@ -366,7 +346,7 @@ activity_plot
 ```
 
 #comment:
-For high schoo equivalent and more than high school, females tend to shower a shower total daily activity than male. for less than high school education leve, females shows a higher total daily acitivity from age 20 to age 50, than shows a lower total daily activity from age 50 to age 80. For morethan high school education level, both male and female has smaller range of total daily activity compared to other educaation level groups. 
+THe total dily acitivity generally decerase by age. For high schoo equivalent and more than high school, females tend to shower a shower total daily activity than male. for less than high school education leve, females shows a higher total daily acitivity from age 20 to age 50, than shows a lower total daily activity from age 50 to age 80. For morethan high school education level, both male and female has smaller range of total daily activity compared to other educaation level groups. 
 
 
 
